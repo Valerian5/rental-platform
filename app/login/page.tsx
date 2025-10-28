@@ -17,26 +17,34 @@ export default function LoginPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [leftLogoUrl, setLeftLogoUrl] = useState<string | null>(null)
+  const [rightLogoUrl, setRightLogoUrl] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   })
 
-  // Récupérer le logo
+  // Récupérer les logos (variantes gauche/droite)
   useEffect(() => {
-    const fetchLogo = async () => {
+    const fetchLogos = async () => {
       try {
-        const response = await fetch('/api/public/logo')
-        if (response.ok) {
-          const data = await response.json()
-          setLogoUrl(data.logoUrl)
+        // Logo gauche (branding)
+        const resLeft = await fetch('/api/public/logo?page=login&position=left')
+        if (resLeft.ok) {
+          const dataLeft = await resLeft.json()
+          setLeftLogoUrl(dataLeft.logo_url ?? null)
+        }
+        // Logo droite (au-dessus du formulaire)
+        const resRight = await fetch('/api/public/logo?page=login&position=right')
+        if (resRight.ok) {
+          const dataRight = await resRight.json()
+          setRightLogoUrl(dataRight.logo_url ?? null)
         }
       } catch (error) {
         console.warn('Erreur récupération logo:', error)
       }
     }
-    fetchLogo()
+    fetchLogos()
   }, [])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -91,9 +99,9 @@ export default function LoginPage() {
           <div className="absolute inset-0 bg-black/20"></div>
           <div className="relative z-10 flex flex-col justify-center px-12 py-16">
             <div className="mb-8">
-              {logoUrl ? (
+              {leftLogoUrl ? (
                 <Image
-                  src={logoUrl}
+                  src={leftLogoUrl}
                   alt="Logo"
                   width={120}
                   height={120}
@@ -161,9 +169,9 @@ export default function LoginPage() {
                 <ArrowLeft className="h-4 w-4 mr-1" />
                 Retour à l'accueil
               </Link>
-              {logoUrl && (
+              {rightLogoUrl && (
                 <Image
-                  src={logoUrl}
+                  src={rightLogoUrl}
                   alt="Logo"
                   width={80}
                   height={80}
@@ -174,12 +182,17 @@ export default function LoginPage() {
               <p className="text-gray-600 mt-2">Accédez à votre compte</p>
             </div>
 
-            {/* Header desktop */}
+            {/* Header desktop avec logo à droite si disponible */}
             <div className="hidden lg:block mb-8">
               <Link href="/" className="inline-flex items-center text-blue-600 hover:text-blue-700 text-sm mb-6">
-                <ArrowLeft className="h-4 w-4 mr-1" />
-                Retour à l'accueil
-              </Link>
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          Retour à l'accueil
+        </Link>
+              {rightLogoUrl && (
+                <div className="mb-4">
+                  <Image src={rightLogoUrl} alt="Logo" width={64} height={64} />
+                </div>
+              )}
               <h1 className="text-3xl font-bold text-gray-900">Connexion</h1>
               <p className="text-gray-600 mt-2">Accédez à votre compte</p>
             </div>
@@ -187,52 +200,52 @@ export default function LoginPage() {
             <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
               <CardContent className="p-8">
                 <form onSubmit={handleSubmit} className="space-y-6">
-                  <div className="space-y-2">
+              <div className="space-y-2">
                     <Label htmlFor="email" className="text-sm font-medium text-gray-700">
                       Adresse email
                     </Label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        id="email"
-                        name="email"
-                        type="email"
-                        placeholder="votre.email@exemple.com"
-                        value={formData.email}
-                        onChange={handleChange}
-                        required
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="votre.email@exemple.com"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
                         className="pl-10 h-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                      />
+                />
                     </div>
-                  </div>
+              </div>
 
-                  <div className="space-y-2">
+              <div className="space-y-2">
                     <Label htmlFor="password" className="text-sm font-medium text-gray-700">
                       Mot de passe
                     </Label>
-                    <div className="relative">
+                <div className="relative">
                       <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        id="password"
-                        name="password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Votre mot de passe"
-                        value={formData.password}
-                        onChange={handleChange}
-                        required
+                  <Input
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Votre mot de passe"
+                    value={formData.password}
+                    onChange={handleChange}
+                    required
                         className="pl-10 pr-12 h-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
                         {showPassword ? <EyeOff className="h-4 w-4 text-gray-400" /> : <Eye className="h-4 w-4 text-gray-400" />}
-                      </Button>
-                    </div>
-                  </div>
+                  </Button>
+                </div>
+              </div>
 
                   <div className="flex items-center justify-between">
                     <Link 
@@ -256,19 +269,19 @@ export default function LoginPage() {
                     ) : (
                       "Se connecter"
                     )}
-                  </Button>
+              </Button>
 
                   <div className="text-center">
                     <p className="text-sm text-gray-600">
                       Pas encore de compte ?{" "}
                       <Link href="/register" className="text-blue-600 hover:text-blue-700 font-medium hover:underline">
-                        Créer un compte
-                      </Link>
+                  Créer un compte
+                </Link>
                     </p>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
           </div>
         </div>
       </div>

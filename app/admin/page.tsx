@@ -1142,6 +1142,148 @@ function AdminContent() {
 
                       <Separator />
 
+                      {/* Logos des pages d'authentification */}
+                      <Separator />
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-medium flex items-center gap-2">
+                          <Upload className="h-4 w-4" />
+                          Logos des pages d'authentification
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Login gauche */}
+                          <div className="space-y-2">
+                            <Label htmlFor="login-left-logo">Login - colonne gauche (fond sombre)</Label>
+                            <div
+                              className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer"
+                              onClick={() => document.getElementById("login-left-logo-input")?.click()}
+                            >
+                              {logos["login_left"] ? (
+                                <div className="space-y-2">
+                                  <img src={logos["login_left"] || "/placeholder.svg"} alt="Logo login gauche" className="max-h-16 mx-auto" />
+                                  <p className="text-sm text-green-600">Logo uploadé</p>
+                                </div>
+                              ) : (
+                                <div className="space-y-2">
+                                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                                  <div className="text-sm text-gray-600">
+                                    <p>Cliquez pour uploader ou glissez-déposez</p>
+                                    <p className="text-xs">PNG, JPG jusqu'à 5MB</p>
+                                  </div>
+                                </div>
+                              )}
+                              <input
+                                id="login-left-logo-input"
+                                type="file"
+                                className="hidden"
+                                accept="image/*"
+                                onChange={(e) => { const file = e.target.files?.[0]; if (file) handleLogoUpload(file, "login_left") }}
+                                disabled={isUploading}
+                              />
+                            </div>
+                            <p className="text-xs text-gray-500">Affiché à gauche sur /login (fond sombre)</p>
+                          </div>
+
+                          {/* Login droite */}
+                          <div className="space-y-2">
+                            <Label htmlFor="login-right-logo">Login - au-dessus du formulaire (fond clair)</Label>
+                            <div
+                              className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer"
+                              onClick={() => document.getElementById("login-right-logo-input")?.click()}
+                            >
+                              {logos["login_right"] ? (
+                                <div className="space-y-2">
+                                  <img src={logos["login_right"] || "/placeholder.svg"} alt="Logo login droite" className="max-h-16 mx-auto" />
+                                  <p className="text-sm text-green-600">Logo uploadé</p>
+                                </div>
+                              ) : (
+                                <div className="space-y-2">
+                                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                                  <div className="text-sm text-gray-600">
+                                    <p>Cliquez pour uploader ou glissez-déposez</p>
+                                    <p className="text-xs">PNG, JPG jusqu'à 5MB</p>
+                                  </div>
+                                </div>
+                              )}
+                              <input
+                                id="login-right-logo-input"
+                                type="file"
+                                className="hidden"
+                                accept="image/*"
+                                onChange={(e) => { const file = e.target.files?.[0]; if (file) handleLogoUpload(file, "login_right") }}
+                                disabled={isUploading}
+                              />
+                            </div>
+                            <p className="text-xs text-gray-500">Affiché à droite sur /login (fond clair)</p>
+                          </div>
+
+                          {/* Register gauche */}
+                          <div className="space-y-2">
+                            <Label htmlFor="register-left-logo">Register - colonne gauche (fond sombre)</Label>
+                            <div
+                              className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer"
+                              onClick={() => document.getElementById("register-left-logo-input")?.click()}
+                            >
+                              {logos["register_left"] ? (
+                                <div className="space-y-2">
+                                  <img src={logos["register_left"] || "/placeholder.svg"} alt="Logo register gauche" className="max-h-16 mx-auto" />
+                                  <p className="text-sm text-green-600">Logo uploadé</p>
+                                </div>
+                              ) : (
+                                <div className="space-y-2">
+                                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                                  <div className="text-sm text-gray-600">
+                                    <p>Cliquez pour uploader ou glissez-déposez</p>
+                                    <p className="text-xs">PNG, JPG jusqu'à 5MB</p>
+                                  </div>
+                                </div>
+                              )}
+                              <input
+                                id="register-left-logo-input"
+                                type="file"
+                                className="hidden"
+                                accept="image/*"
+                                onChange={(e) => { const file = e.target.files?.[0]; if (file) handleLogoUpload(file, "register_left") }}
+                                disabled={isUploading}
+                              />
+                            </div>
+                            <p className="text-xs text-gray-500">Affiché à gauche sur /register (fond sombre)</p>
+                          </div>
+
+                          {/* Register droite */}
+                          <div className="space-y-2">
+                            <Label htmlFor="register-right-logo">Register - au-dessus du formulaire (fond clair)</Label>
+                            <div
+                              className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer"
+                              onClick={() => document.getElementById("register-right-logo-input")?.click()}
+                            >
+                              {logos["register_right"] ? (
+                                <div className="space-y-2">
+                                  <img src={logos["register_right"] || "/placeholder.svg"} alt="Logo register droite" className="max-h-16 mx-auto" />
+                                  <p className="text-sm text-green-600">Logo uploadé</p>
+                                </div>
+                              ) : (
+                                <div className="space-y-2">
+                                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                                  <div className="text-sm text-gray-600">
+                                    <p>Cliquez pour uploader ou glissez-déposez</p>
+                                    <p className="text-xs">PNG, JPG jusqu'à 5MB</p>
+                                  </div>
+                                </div>
+                              )}
+                              <input
+                                id="register-right-logo-input"
+                                type="file"
+                                className="hidden"
+                                accept="image/*"
+                                onChange={(e) => { const file = e.target.files?.[0]; if (file) handleLogoUpload(file, "register_right") }}
+                                disabled={isUploading}
+                              />
+                            </div>
+                            <p className="text-xs text-gray-500">Affiché à droite sur /register (fond clair)</p>
+                          </div>
+                        </div>
+                      </div>
+
                       {/* Prévisualisation */}
                       <div className="space-y-4">
                         <h3 className="text-lg font-medium flex items-center gap-2">
@@ -1192,6 +1334,59 @@ function AdminContent() {
                                 <div className="text-right text-sm">
                                   <div>{siteTitle}</div>
                                   <div className="text-xs opacity-80">Document officiel</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Prévisualisation Auth */}
+                          <div className="space-y-2">
+                            <Label>Page de connexion (aperçu)</Label>
+                            <div className="border rounded-lg">
+                              <div className="grid grid-cols-2 min-h-[160px]">
+                                <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 text-white flex items-center">
+                                  <div>
+                                    {logos["login_left"] ? (
+                                      <img src={logos["login_left"]} alt="login left" className="h-10 mb-3" />
+                                    ) : (
+                                      <div className="w-10 h-10 bg-white/20 rounded-md" />
+                                    )}
+                                    <div className="text-sm opacity-80">Colonne gauche</div>
+                                  </div>
+                                </div>
+                                <div className="bg-white p-6">
+                                  {logos["login_right"] ? (
+                                    <img src={logos["login_right"]} alt="login right" className="h-10 mb-3" />
+                                  ) : (
+                                    <div className="w-10 h-10 bg-gray-200 rounded-md mb-3" />
+                                  )}
+                                  <div className="text-sm text-gray-600">Formulaire</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>Page d'inscription (aperçu)</Label>
+                            <div className="border rounded-lg">
+                              <div className="grid grid-cols-2 min-h-[160px]">
+                                <div className="bg-gradient-to-br from-blue-600 to-blue-800 p-6 text-white flex items-center">
+                                  <div>
+                                    {logos["register_left"] ? (
+                                      <img src={logos["register_left"]} alt="register left" className="h-10 mb-3" />
+                                    ) : (
+                                      <div className="w-10 h-10 bg-white/20 rounded-md" />
+                                    )}
+                                    <div className="text-sm opacity-80">Colonne gauche</div>
+                                  </div>
+                                </div>
+                                <div className="bg-white p-6">
+                                  {logos["register_right"] ? (
+                                    <img src={logos["register_right"]} alt="register right" className="h-10 mb-3" />
+                                  ) : (
+                                    <div className="w-10 h-10 bg-gray-200 rounded-md mb-3" />
+                                  )}
+                                  <div className="text-sm text-gray-600">Formulaire</div>
                                 </div>
                               </div>
                             </div>

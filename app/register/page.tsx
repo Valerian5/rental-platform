@@ -16,7 +16,8 @@ import { toast } from "sonner"
 export default function RegisterPage() {
   const router = useRouter()
   const [userType, setUserType] = useState<string>("")
-  const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [leftLogoUrl, setLeftLogoUrl] = useState<string | null>(null)
+  const [rightLogoUrl, setRightLogoUrl] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
@@ -29,14 +30,19 @@ export default function RegisterPage() {
   })
   const [passwordErrors, setPasswordErrors] = useState<string[]>([])
 
-  // Charger le logo depuis les paramètres admin
+  // Charger les logos (variantes gauche/droite) depuis les paramètres admin
   useEffect(() => {
     const loadLogo = async () => {
       try {
-        const response = await fetch('/api/public/logo')
-        if (response.ok) {
-          const data = await response.json()
-          setLogoUrl(data.logo_url)
+        const resLeft = await fetch('/api/public/logo?page=register&position=left')
+        if (resLeft.ok) {
+          const dataLeft = await resLeft.json()
+          setLeftLogoUrl(dataLeft.logo_url ?? null)
+        }
+        const resRight = await fetch('/api/public/logo?page=register&position=right')
+        if (resRight.ok) {
+          const dataRight = await resRight.json()
+          setRightLogoUrl(dataRight.logo_url ?? null)
         }
       } catch (error) {
         console.log("Logo non configuré, utilisation du logo par défaut")
@@ -140,9 +146,9 @@ export default function RegisterPage() {
         <div className="absolute inset-0 bg-black/20"></div>
         <div className="relative z-10 flex flex-col justify-center px-12 py-16">
           <div className="mb-8">
-            {logoUrl ? (
+            {leftLogoUrl ? (
               <Image
-                src={logoUrl}
+                src={leftLogoUrl}
                 alt="Logo"
                 width={120}
                 height={120}
@@ -228,6 +234,12 @@ export default function RegisterPage() {
 
           <Card className="shadow-xl border-0">
             <CardHeader className="space-y-2 text-center">
+              {/* Logo au-dessus du titre (droite) */}
+              {rightLogoUrl && (
+                <div className="flex items-center justify-center mb-4">
+                  <Image src={rightLogoUrl} alt="Logo" width={64} height={64} className="rounded-md" />
+                </div>
+              )}
               <div className="flex items-center justify-center mb-4">
                 <div className="p-3 bg-blue-100 rounded-full">
                   <Building className="h-6 w-6 text-blue-600" />
